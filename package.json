@@ -7,11 +7,18 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "asbuild:debug": "asc src/wasm/mcp-server.ts --target debug",
     "asbuild:release": "asc src/wasm/mcp-server.ts --target release",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release"
   },
-  "keywords": ["mcp", "wasm", "webassembly"],
+  "keywords": [
+    "mcp",
+    "wasm",
+    "webassembly"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -19,8 +26,14 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@types/jest": "^29.5.14",
     "@types/node": "latest",
     "assemblyscript": "latest",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.2.5",
     "typescript": "latest",
     "vite": "latest"
   }

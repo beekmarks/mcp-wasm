@@ -1,69 +1,109 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-// Create the MCP server instance
+const calculatorSchema = z.object({
+  operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+  a: z.number(),
+  b: z.number()
+});
+
+const storageSchema = z.object({
+  key: z.string(),
+  value: z.string()
+});
+
+// In-memory storage
+const storage = new Map<string, string>();
+
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "WASM MCP Server",
     version: "1.0.0"
   });
 
-  // Add a simple calculator tool
+  // Register calculator tool
   server.tool(
     "calculate",
-    {
-      operation: z.enum(["add", "subtract", "multiply", "divide"]),
-      a: z.number(),
-      b: z.number()
-    },
-    async ({ operation, a, b }) => {
-      let result: number;
-      switch (operation) {
-        case "add":
-          result = a + b;
-          break;
-        case "subtract":
-          result = a - b;
-          break;
-        case "multiply":
-          result = a * b;
-          break;
-        case "divide":
-          if (b === 0) throw new Error("Division by zero");
-          result = a / b;
-          break;
+    calculatorSchema.shape,
+    async (params) => {
+      // Parse and validate inputs
+      const result = calculatorSchema.safeParse(params);
+      if (!result.success) {
+        throw new Error('Invalid input parameters');
       }
+
+      const { operation, a, b } = result.data;
+      let value: number;
+      
+      switch (operation) {
+        case 'add':
+          value = a + b;
+          break;
+        case 'subtract':
+          value = a - b;
+          break;
+        case 'multiply':
+          value = a * b;
+          break;
+        case 'divide':
+          if (b === 0) throw new Error('Division by zero');
+          value = a / b;
+          break;
+        default:
+          throw new Error('Invalid operation');
+      }
+
       return {
-        content: [{ type: "text", text: String(result) }]
+        content: [{ type: "text", text: value.toString() }]
       };
     }
   );
 
-  // Add a simple storage resource
-  const storage = new Map<string, string>();
-  
+  // Register storage tool
+  server.tool(
+    "set-storage",
+    storageSchema.shape,
+    async (params) => {
+      // Parse and validate inputs
+      const result = storageSchema.safeParse(params);
+      if (!result.success) {
+        throw new Error('Invalid input parameters');
+      }
+
+      const { key, value } = result.data;
+      storage.set(key, value);
+      
+      return {
+        content: [{ type: "text", text: 'Value stored successfully' }]
+      };
+    }
+  );
+
+  // Register storage resource
   server.resource(
     "storage",
     "storage://{key}",
-    async (uri, { key }) => ({
-      contents: [{
-        uri: uri.href,
-        text: storage.get(key) || "Key not found"
-      }]
-    })
-  );
+    async (uri: URL, extra: any) => {
+      const key = extra.key;
+      if (!key) {
+        throw new Error('Missing key parameter');
+      }
 
-  // Add a storage tool
-  server.tool(
-    "set-storage",
-    {
-      key: z.string(),
-      value: z.string()
-    },
-    async ({ key, value }) => {
-      storage.set(key, value);
+      const value = storage.get(key);
+      if (!value) {
+        return {
+          contents: [{
+            uri: uri.toString(),
+            text: 'Key not found'
+          }]
+        };
+      }
+      
       return {
-        content: [{ type: "text", text: `Stored value at key: ${key}` }]
+        contents: [{
+          uri: uri.toString(),
+          text: value
+        }]
       };
     }
   );
