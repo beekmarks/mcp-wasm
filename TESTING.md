@@ -187,39 +187,113 @@ describe('Server-Transport Integration', () => {
 
 ```typescript
 describe('UI Integration', () => {
-  beforeEach(() => {
-    document.body.innerHTML = `
-      <select id="operation">
-        <option value="add">Add</option>
-      </select>
-      <input id="num1" type="number">
-      <input id="num2" type="number">
-      <button onclick="calculate()">Calculate</button>
-      <div id="calcOutput"></div>
-    `;
+  beforeEach(async () => {
+    // First set up test environment
+    await setupTestEnvironment();
     
-    // Initialize server
-    initializeMcpServer();
+    // Then initialize UI
+    setupCalculatorUI();
   });
   
   test('should handle calculator UI interaction', async () => {
-    // Set up inputs
     const num1Input = document.getElementById('num1') as HTMLInputElement;
     const num2Input = document.getElementById('num2') as HTMLInputElement;
-    const calcButton = document.querySelector('button');
+    const operationSelect = document.getElementById('operation') as HTMLSelectElement;
+    const calcButton = document.getElementById('calcButton') as HTMLButtonElement;
+    const output = document.getElementById('calcOutput');
     
-    num1Input.value = '5';
-    num2Input.value = '3';
+    // Test each operation
+    const operations = [
+      { op: 'add', a: 5, b: 3, expected: '8' },
+      { op: 'subtract', a: 10, b: 4, expected: '6' },
+      { op: 'multiply', a: 6, b: 7, expected: '42' },
+      { op: 'divide', a: 15, b: 3, expected: '5' }
+    ];
     
-    // Trigger calculation
-    calcButton?.click();
+    for (const { op, a, b, expected } of operations) {
+      operationSelect.value = op;
+      num1Input.value = a.toString();
+      num2Input.value = b.toString();
+      
+      fireEvent.click(calcButton);
+      
+      // Wait for the calculation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      expect(output?.textContent).toBe(`Result: ${expected}`);
+    }
+  });
+  
+  test('should handle calculator error cases', async () => {
+    const num1Input = document.getElementById('num1') as HTMLInputElement;
+    const num2Input = document.getElementById('num2') as HTMLInputElement;
+    const operationSelect = document.getElementById('operation') as HTMLSelectElement;
+    const calcButton = document.getElementById('calcButton') as HTMLButtonElement;
+    const output = document.getElementById('calcOutput');
     
-    // Wait for async operation
+    // Test division by zero
+    operationSelect.value = 'divide';
+    num1Input.value = '10';
+    num2Input.value = '0';
+    
+    fireEvent.click(calcButton);
+    
+    // Wait for the error to be displayed
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Check output
-    const output = document.getElementById('calcOutput');
-    expect(output?.textContent).toBe('Result: 8');
+    expect(output?.textContent).toContain('Error');
+    expect(output?.textContent).toContain('Division by zero');
+  });
+});
+
+describe('Storage UI Integration', () => {
+  beforeEach(async () => {
+    // First set up test environment
+    await setupTestEnvironment();
+    
+    // Then initialize UI
+    setupStorageUI();
+  });
+  
+  test('should handle storage UI interaction', async () => {
+    const keyInput = document.getElementById('storageKey') as HTMLInputElement;
+    const valueInput = document.getElementById('storageValue') as HTMLInputElement;
+    const setButton = document.getElementById('setStorageButton') as HTMLButtonElement;
+    const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
+    const output = document.getElementById('storageOutput');
+    
+    // Set value
+    keyInput.value = 'test-key';
+    valueInput.value = 'test-value';
+    fireEvent.click(setButton);
+    
+    // Wait for the storage operation to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    expect(output?.textContent).toContain('Value stored successfully');
+    
+    // Get value
+    valueInput.value = '';
+    fireEvent.click(getButton);
+    
+    // Wait for the retrieval to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    expect(output?.textContent).toContain('test-value');
+  });
+  
+  test('should handle missing storage keys', async () => {
+    const keyInput = document.getElementById('storageKey') as HTMLInputElement;
+    const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
+    const output = document.getElementById('storageOutput');
+    
+    keyInput.value = 'nonexistent-key';
+    fireEvent.click(getButton);
+    
+    // Wait for the retrieval to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    expect(output?.textContent).toContain('Key not found');
   });
 });
 ```

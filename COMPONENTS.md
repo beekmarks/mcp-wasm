@@ -57,35 +57,70 @@ Handles client-side integration, UI interactions, and server communication.
 
 **Component Structure:**
 ```
-- Server Initialization
-  ├── Transport setup
+- Environment Setup
+  ├── Transport initialization
   ├── Server creation
   └── Connection establishment
 
-- UI Integration
-  ├── Button handlers
+- Calculator Integration
+  ├── UI initialization
+  ├── Event handlers
   ├── Input validation
-  └── Output display
+  └── Result display
 
-- Tool Integration
-  ├── Calculator
-  └── Storage
-
-- Resource Integration
-  └── Storage access
+- Storage Integration
+  ├── UI initialization
+  ├── Set/Get handlers
+  ├── Key/Value management
+  └── Status display
 ```
 
-**State Management:**
-- `serverInitialized`: Tracks server readiness
-- `mcpServer`: Server instance reference
-- `transport`: Browser transport instance
+**Implementation Flow:**
+```typescript
+// 1. Environment Setup
+async function setupEnvironment() {
+  const transport = new BrowserTransport();
+  await transport.start();
+  const server = createServer();
+  await server.connect(transport);
+  return { server, transport };
+}
+
+// 2. Calculator Integration
+async function initializeCalculator(transport: BrowserTransport) {
+  // Set up event handlers for calculator UI
+  // Handle calculations through transport
+  // Display results/errors
+}
+
+// 3. Storage Integration
+async function initializeStorage(transport: BrowserTransport) {
+  // Set up event handlers for storage UI
+  // Handle set/get operations
+  // Display results/errors
+}
+
+// 4. Main Initialization
+async function main() {
+  const { transport } = await setupEnvironment();
+  await initializeCalculator(transport);
+  await initializeStorage(transport);
+}
+```
 
 **Error Handling:**
-- Server initialization errors
+- Transport connection errors
 - Tool execution errors
 - Resource access errors
 - Input validation
-- Transport errors
+- UI element initialization
+- Message handling errors
+
+**State Management:**
+- Single transport instance shared across components
+- Isolated UI component initialization
+- Independent error handling per component
+- Asynchronous operation handling
 
 ### 3. Browser Transport (`browser-transport.ts`)
 
