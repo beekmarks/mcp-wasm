@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM MCP Server Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .output {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+        }
+        input, select {
+            margin: 5px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WASM MCP Server Demo</h1>
+    
+    <div class="section">
+        <h2>Calculator Tool</h2>
+        <select id="operation">
+            <option value="add">Add</option>
+            <option value="subtract">Subtract</option>
+            <option value="multiply">Multiply</option>
+            <option value="divide">Divide</option>
+        </select>
+        <input type="number" id="num1" placeholder="Number 1" value="0">
+        <input type="number" id="num2" placeholder="Number 2" value="0">
+        <button onclick="calculate()">Calculate</button>
+        <div id="calcOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h2>Storage Tool</h2>
+        <input type="text" id="storageKey" placeholder="Key">
+        <input type="text" id="storageValue" placeholder="Value">
+        <button onclick="setStorage()">Set Storage</button>
+        <button onclick="getStorage()">Get Storage</button>
+        <div id="storageOutput" class="output"></div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+</body>
+</html>

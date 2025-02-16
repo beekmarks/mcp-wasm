@@ -1,0 +1,27 @@
+{
+  "name": "mcp-wasm-poc",
+  "version": "1.0.0",
+  "description": "WASM-based Model Context Protocol Server POC",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "asbuild:debug": "asc src/wasm/mcp-server.ts --target debug",
+    "asbuild:release": "asc src/wasm/mcp-server.ts --target release",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release"
+  },
+  "keywords": ["mcp", "wasm", "webassembly"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "assemblyscript": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}
