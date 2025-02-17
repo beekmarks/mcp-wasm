@@ -22,6 +22,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.6",
     "@modelcontextprotocol/sdk": "latest",
     "zod": "^3.22.4"
   },

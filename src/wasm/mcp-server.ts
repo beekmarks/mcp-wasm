@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+// Create a shared storage instance
+export const storage = new Map<string, string>();
+
 // Create the MCP server instance
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -40,16 +43,24 @@ export function createServer(): McpServer {
   );
 
   // Add a simple storage resource
-  const storage = new Map<string, string>();
   server.resource(
     "storage",
-    "storage://{key}",
-    async (uri, { key }) => ({
-      contents: [{
-        uri: uri.href,
-        text: storage.get(key) || "Key not found"
-      }]
-    })
+    "mc://storage/{key}",
+    async (uri) => {
+      console.log('Resource URI:', uri);
+      console.log('Resource pathname:', uri.pathname);
+      const key = uri.pathname.replace('/storage/', '');
+      console.log('Extracted key:', key);
+      console.log('Storage contents:', Array.from(storage.entries()));
+      const value = storage.get(key);
+      console.log('Retrieved value:', value);
+      return {
+        contents: [{
+          uri: uri.href,
+          text: value || "Key not found"
+        }]
+      };
+    }
   );
 
   // Add a storage tool

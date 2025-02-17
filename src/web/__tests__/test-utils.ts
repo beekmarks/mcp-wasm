@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { BrowserTransport } from '../browser-transport';
+import { JSONRPCMessage, JSONRPCResponse } from '../types';
 import { createServer } from '../server';
 import { getToolHandler, getResourceHandler } from './test-helpers';
+import { TransportAdapter } from '../transport-adapter';
 
 let testEnvironment: { transport: BrowserTransport; server: McpServer } | null = null;
 
@@ -13,9 +15,10 @@ export async function setupTestEnvironment() {
 
   const transport = new BrowserTransport(false); // Disable test mode to use actual handlers
   const server = createServer();
+  const adapter = new TransportAdapter(transport, server);
 
   await transport.start();
-  await server.connect(transport);
+  await adapter.connect();
 
   testEnvironment = { transport, server };
   return testEnvironment;
@@ -66,8 +69,8 @@ export function setupCalculatorUI() {
       };
 
       transport.onMessage((response) => {
-        if (response.result && response.result.content) {
-          output.textContent = `Result: ${response.result.content[0].text}`;
+        if (response.result && response.result.contents) {
+          output.textContent = `Result: ${response.result.contents[0].text}`;
         } else if (response.error) {
           output.textContent = `Error: ${response.error.message}`;
         }
@@ -110,7 +113,7 @@ export function setupStorageUI() {
         method: "tool",
         id: 1,
         params: {
-          name: "set-storage",
+          name: "storage-set",
           params: {
             key,
             value
@@ -119,8 +122,8 @@ export function setupStorageUI() {
       };
 
       transport.onMessage((response) => {
-        if (response.result && response.result.content) {
-          output.textContent = response.result.content[0].text;
+        if (response.result && response.result.contents) {
+          output.textContent = response.result.contents[0].text;
         } else if (response.error) {
           output.textContent = `Error: ${response.error.message}`;
         }
@@ -139,17 +142,21 @@ export function setupStorageUI() {
       const { transport } = testEnvironment!;
       const message = {
         jsonrpc: "2.0" as const,
-        method: "resource",
+        method: 'resource',
         id: 2,
         params: {
-          uri: `storage://${key}`,
-          key
+          name: 'storage-get',
+          params: {
+            key: key
+          }
         }
       };
 
       transport.onMessage((response) => {
         if (response.result && response.result.contents) {
-          output.textContent = response.result.contents[0].text;
+          const valueInput = document.getElementById('storageValue') as HTMLInputElement;
+          valueInput.value = response.result.contents[0].text;
+          output.textContent = 'Value retrieved successfully';
         } else if (response.error) {
           output.textContent = `Error: ${response.error.message}`;
         }
@@ -160,6 +167,22 @@ export function setupStorageUI() {
       output.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   });
+}
+
+async function getStorageValue(transport: BrowserTransport, key: string): Promise<string> {
+  const response = await transport.send({
+    jsonrpc: "2.0",
+    method: "tool",
+    id: Date.now(),
+    params: {
+      name: "storage-get",
+      params: {
+        key: key
+      }
+    }
+  });
+
+  return response.result?.contents?.[0]?.text || '';
 }
 
 describe('Test Utils', () => {

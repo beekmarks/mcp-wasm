@@ -159,7 +159,70 @@ export class BrowserTransport {
 4. Response returned via transport
 5. Client receives and processes response
 
-### 4. UI Components
+### 4. LLM Integration (`llm.ts`)
+
+**Purpose:**  
+Provides natural language processing capabilities for interpreting user queries and converting them into tool calls.
+
+**Key Responsibilities:**
+- Natural language understanding
+- Tool selection and parameter extraction
+- Response formatting
+- Error handling
+- Message history management
+
+**Implementation Details:**
+```typescript
+export class LLMHandler {
+  private engine: MLCEngine;
+  private transport: BrowserTransport;
+  private messages: Message[] = [];
+  
+  async initialize() {
+    // Initialize LLM engine
+    // Set up system prompts
+    // Configure message handling
+  }
+  
+  async processUserInput(userInput: string) {
+    // Process input
+    // Extract tool calls
+    // Execute operations
+    // Format response
+  }
+}
+```
+
+**Key Features:**
+- Local LLM processing using WebGPU
+- System prompts for consistent behavior
+- Tool call extraction and validation
+- Response streaming support
+- Error handling and recovery
+
+**Message Flow:**
+1. User submits natural language query
+2. LLM processes input with system context
+3. Tool calls are extracted and validated
+4. Tools are executed via transport
+5. Results are formatted and returned
+6. Conversation history is updated
+
+**Integration Points:**
+```typescript
+// Main integration
+const llmHandler = new LLMHandler(transport, server, statusCallback);
+await llmHandler.initialize();
+
+// UI integration
+submitButton.addEventListener('click', async () => {
+  const query = inputField.value;
+  const response = await llmHandler.processUserInput(query);
+  displayResult(response);
+});
+```
+
+### 5. UI Components
 
 **Calculator Interface:**
 ```html

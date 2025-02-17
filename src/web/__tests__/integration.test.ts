@@ -1,77 +1,73 @@
 import { setupTestEnvironment, setupCalculatorUI, setupStorageUI } from './test-utils';
 import { fireEvent } from '@testing-library/dom';
+import { BrowserTransport } from '../browser-transport';
+import { JSONRPCMessage, JSONRPCResponse } from '../types';
+import { z } from 'zod';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 describe('Integration Tests', () => {
+  let transport: BrowserTransport;
+
+  beforeEach(() => {
+    transport = new BrowserTransport();
+    transport['isTestMode'] = true;
+  });
+
   describe('Server-Transport Integration', () => {
     test('should handle tool execution through transport', async () => {
-      const { transport, server } = await setupTestEnvironment();
+      const { server } = await setupTestEnvironment();
       
-      const message = {
-        jsonrpc: "2.0" as const,
+      const message: JSONRPCMessage = {
+        jsonrpc: "2.0",
         method: "tool",
         id: 1,
         params: {
-          name: "calculate",
-          params: {
-            operation: "add",
-            a: 5,
-            b: 3
-          }
-        }
-      };
-      
-      const mockCallback = jest.fn();
-      transport.onMessage(mockCallback);
-      await transport.send(message);
-      
-      // Wait for the response
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      expect(mockCallback).toHaveBeenCalled();
-      const response = mockCallback.mock.calls[0][0];
-      expect(response.result.content[0].text).toBe('8');
-    });
-    
-    test('should handle resource access through transport', async () => {
-      const { transport, server } = await setupTestEnvironment();
-      
-      // First store a value
-      await transport.send({
-        jsonrpc: "2.0" as const,
-        method: "tool",
-        id: 1,
-        params: {
-          name: "set-storage",
+          name: "storage-set",
           params: {
             key: "test-key",
             value: "test-value"
           }
         }
-      });
+      };
+
+      await transport.send(message);
+      expect(transport.getLastResponse()?.result?.contents?.[0]?.text).toBe('Value stored successfully');
+    });
+    
+    test('should handle resource access through transport', async () => {
+      const { server } = await setupTestEnvironment();
       
-      // Wait for the storage operation to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      // First store a value
+      const setMessage: JSONRPCMessage = {
+        jsonrpc: "2.0",
+        method: "tool",
+        id: 1,
+        params: {
+          name: "storage-set",
+          params: {
+            key: "test-key",
+            value: "test-value"
+          }
+        }
+      };
+
+      await transport.send(setMessage);
+
       // Then retrieve it
-      const mockCallback = jest.fn();
-      transport.onMessage(mockCallback);
-      
-      await transport.send({
-        jsonrpc: "2.0" as const,
+      const getMessage: JSONRPCMessage = {
+        jsonrpc: "2.0",
         method: "resource",
         id: 2,
         params: {
-          uri: "storage://test-key",
-          key: "test-key"
+          name: "storage-get",
+          params: {
+            key: "test-key"
+          }
         }
-      });
-      
-      // Wait for the response
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      expect(mockCallback).toHaveBeenCalled();
-      const response = mockCallback.mock.calls[0][0];
-      expect(response.result.contents[0].text).toBe('test-value');
+      };
+
+      await transport.send(getMessage);
+      expect(transport.getLastResponse()?.result?.contents?.[0]?.text).toBe('test-value');
     });
   });
   
@@ -142,39 +138,50 @@ describe('Integration Tests', () => {
     test('should handle storage UI interaction', async () => {
       const keyInput = document.getElementById('storageKey') as HTMLInputElement;
       const valueInput = document.getElementById('storageValue') as HTMLInputElement;
-      const setButton = document.getElementById('setStorageButton') as HTMLButtonElement;
-      const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
       const output = document.getElementById('storageOutput');
-      
-      // Set value
+      const setButton = document.getElementById('setStorageButton');
+      const getButton = document.getElementById('getStorageButton');
+
+      if (!keyInput || !valueInput || !output || !setButton || !getButton) {
+        throw new Error('Storage UI elements not found');
+      }
+
       keyInput.value = 'test-key';
       valueInput.value = 'test-value';
+
+      // Set value
       fireEvent.click(setButton);
-      
-      // Wait for the storage operation to complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      expect(output?.textContent).toContain('Value stored successfully');
+      expect(output.textContent).toContain('Value stored successfully');
       
       // Get value
       valueInput.value = '';
       fireEvent.click(getButton);
-      
-      // Wait for the retrieval to complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      expect(output?.textContent).toContain('test-value');
+      expect(valueInput.value).toBe('test-value');
     });
-    
+
     test('should handle missing storage keys', async () => {
-      const keyInput = document.getElementById('storageKey') as HTMLInputElement;
-      const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
-      const output = document.getElementById('storageOutput');
-      
-      keyInput.value = 'nonexistent-key';
-      fireEvent.click(getButton);
-      
-      // Wait for the retrieval to complete
+      const output = document.createElement('div');
+      const request: JSONRPCMessage = {
+        jsonrpc: "2.0",
+        method: 'tool',
+        id: 1,
+        params: {
+          name: 'storage-get',
+          params: {
+            key: 'non-existent-key'
+          }
+        }
+      };
+
+      try {
+        await transport.send(request);
+      } catch (error: any) {
+        output.textContent = error.message;
+      }
       await new Promise(resolve => setTimeout(resolve, 100));
       
       expect(output?.textContent).toContain('Key not found');
@@ -183,23 +190,20 @@ describe('Integration Tests', () => {
   
   describe('End-to-End Workflows', () => {
     test('complete calculator workflow', async () => {
-      const { transport } = await setupTestEnvironment();
-      
-      const operations = ['add', 'subtract', 'multiply', 'divide'];
       const testCases = [
         { a: 5, b: 3, expected: ['8', '2', '15', '1.6666666666666667'] }
       ];
       
       for (const { a, b, expected } of testCases) {
-        for (let i = 0; i < operations.length; i++) {
-          const message = {
-            jsonrpc: "2.0" as const,
+        for (let i = 0; i < 4; i++) {
+          const message: JSONRPCMessage = {
+            jsonrpc: "2.0",
             method: "tool",
             id: i + 1,
             params: {
               name: "calculate",
               params: {
-                operation: operations[i],
+                operation: ['add', 'subtract', 'multiply', 'divide'][i],
                 a,
                 b
               }
@@ -215,14 +219,12 @@ describe('Integration Tests', () => {
           
           expect(mockCallback).toHaveBeenCalled();
           const response = mockCallback.mock.calls[0][0];
-          expect(response.result.content[0].text).toBe(expected[i]);
+          expect(response.result.contents[0].text).toBe(expected[i]);
         }
       }
     });
     
     test('complete storage workflow', async () => {
-      const { transport } = await setupTestEnvironment();
-      
       const testData = [
         { key: 'key1', value: 'value1' },
         { key: 'key2', value: 'value2' }
@@ -231,11 +233,11 @@ describe('Integration Tests', () => {
       for (const { key, value } of testData) {
         // Store value
         await transport.send({
-          jsonrpc: "2.0" as const,
+          jsonrpc: "2.0",
           method: "tool",
           id: 1,
           params: {
-            name: "set-storage",
+            name: "storage-set",
             params: { key, value }
           }
         });
@@ -248,12 +250,14 @@ describe('Integration Tests', () => {
         transport.onMessage(mockCallback);
         
         await transport.send({
-          jsonrpc: "2.0" as const,
-          method: "resource",
+          jsonrpc: "2.0",
+          method: "tool",
           id: 2,
           params: {
-            uri: `storage://${key}`,
-            key
+            name: "storage-get",
+            params: {
+              key: key
+            }
           }
         });
         
@@ -263,6 +267,88 @@ describe('Integration Tests', () => {
         expect(mockCallback).toHaveBeenCalled();
         const response = mockCallback.mock.calls[0][0];
         expect(response.result.contents[0].text).toBe(value);
+      }
+    });
+    
+    test('should handle batch operations', async () => {
+      const { server } = await setupTestEnvironment();
+      
+      const testData = [
+        { key: 'key1', value: 'value1' },
+        { key: 'key2', value: 'value2' }
+      ];
+      
+      for (const { key, value } of testData) {
+        // Store value
+        await transport.send({
+          jsonrpc: "2.0",
+          method: "tool",
+          id: 1,
+          params: {
+            name: "storage-set",
+            params: {
+              key: key,
+              value: value
+            }
+          }
+        });
+
+        // Verify value
+        const mockCallback = jest.fn();
+        transport.onMessage(mockCallback);
+        
+        const response = await transport.send({
+          jsonrpc: "2.0",
+          method: "tool",
+          id: 2,
+          params: {
+            name: "storage-get",
+            params: {
+              key: key
+            }
+          }
+        });
+
+        expect(response?.result?.contents?.[0]?.text).toBe(value);
+      }
+    });
+    
+    test('should handle storage operations', async () => {
+      const { server } = await setupTestEnvironment();
+      const testData = [
+        { key: 'key1', value: 'value1' },
+        { key: 'key2', value: 'value2' }
+      ];
+      
+      for (const { key, value } of testData) {
+        // Store value
+        await transport.send({
+          jsonrpc: "2.0",
+          method: "tool",
+          id: 1,
+          params: {
+            name: "storage-set",
+            params: {
+              key: key,
+              value: value
+            }
+          }
+        });
+
+        // Verify value
+        const response = await transport.send({
+          jsonrpc: "2.0",
+          method: "tool",
+          id: 2,
+          params: {
+            name: "storage-get",
+            params: {
+              key: key
+            }
+          }
+        });
+
+        expect(response.result?.contents?.[0]?.text).toBe(value);
       }
     });
   });

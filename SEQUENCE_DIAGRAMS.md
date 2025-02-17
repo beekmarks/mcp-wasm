@@ -10,6 +10,7 @@ sequenceDiagram
     participant Main
     participant Transport
     participant MCPServer
+    participant LLMHandler
     
     Browser->>Main: Page Load
     activate Main
@@ -30,10 +31,17 @@ sequenceDiagram
     Transport-->>MCPServer: Connection Established
     MCPServer-->>Main: Connection Ready
     
+    Main->>LLMHandler: new LLMHandler(transport, server)
+    activate LLMHandler
+    LLMHandler->>LLMHandler: Initialize Engine
+    LLMHandler->>LLMHandler: Set System Prompts
+    LLMHandler-->>Main: LLM Ready
+    
     Main->>Browser: Enable UI Elements
     deactivate Main
     deactivate Transport
     deactivate MCPServer
+    deactivate LLMHandler
 ```
 
 ## Calculator Operation Flow
@@ -198,6 +206,78 @@ sequenceDiagram
     deactivate Transport
 ```
 
+## Natural Language Query Flow
+
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Main
+    participant LLMHandler
+    participant MCPServer
+    participant Tool
+    
+    UI->>Main: Submit Query
+    activate Main
+    Main->>LLMHandler: processUserInput(query)
+    activate LLMHandler
+    
+    LLMHandler->>LLMHandler: Process with System Context
+    LLMHandler->>LLMHandler: Extract Tool Calls
+    
+    loop For Each Tool Call
+        LLMHandler->>MCPServer: Execute Tool Call
+        activate MCPServer
+        MCPServer->>Tool: Execute Operation
+        activate Tool
+        Tool-->>MCPServer: Result
+        deactivate Tool
+        MCPServer-->>LLMHandler: Tool Response
+        deactivate MCPServer
+        
+        LLMHandler->>LLMHandler: Format Result
+        LLMHandler->>LLMHandler: Update History
+    end
+    
+    LLMHandler-->>Main: Final Response
+    deactivate LLMHandler
+    
+    Main->>UI: Update Display
+    deactivate Main
+```
+
+## LLM Error Handling Flow
+
+```mermaid
+sequenceDiagram
+    participant UI
+    participant Main
+    participant LLMHandler
+    participant MCPServer
+    
+    UI->>Main: Submit Query
+    activate Main
+    Main->>LLMHandler: processUserInput(query)
+    activate LLMHandler
+    
+    alt Engine Not Initialized
+        LLMHandler-->>Main: Error: "Model not initialized"
+    else Invalid Tool Call Format
+        LLMHandler-->>Main: Error: "Invalid tool call format"
+    else Tool Execution Error
+        LLMHandler->>MCPServer: Execute Tool Call
+        MCPServer-->>LLMHandler: Error Response
+        LLMHandler-->>Main: Error: "Tool execution failed"
+    else Success
+        LLMHandler->>MCPServer: Execute Tool Call
+        MCPServer-->>LLMHandler: Success Response
+        LLMHandler-->>Main: Formatted Result
+    end
+    
+    Main->>UI: Display Result/Error
+    deactivate Main
+    deactivate LLMHandler
+```
+
 ## Notes on the Diagrams
 
 ### Component Roles
@@ -206,12 +286,14 @@ sequenceDiagram
 - **Transport**: Manages message passing
 - **MCPServer**: Core server functionality
 - **Tools/Resources**: Specific implementations
+- **LLMHandler**: Handles natural language processing
 
 ### Key Interactions
 1. **Initialization**: One-time setup of server and transport
 2. **Tool Operations**: Synchronous request-response
 3. **Resource Access**: Template-based with parameters
 4. **Error Handling**: At multiple levels
+5. **Natural Language Query**: Asynchronous processing with system context
 
 ### Important Considerations
 - All operations are asynchronous

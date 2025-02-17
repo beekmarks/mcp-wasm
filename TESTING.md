@@ -130,6 +130,56 @@ describe('Browser Transport', () => {
 });
 ```
 
+### LLM Component (`llm.ts`)
+
+```typescript
+describe('LLM Handler', () => {
+  let llmHandler: LLMHandler;
+  let transport: BrowserTransport;
+  let server: McpServer;
+  
+  beforeEach(async () => {
+    transport = new BrowserTransport();
+    await transport.start();
+    server = createServer();
+    await server.connect(transport);
+    llmHandler = new LLMHandler(transport, server, () => {});
+    await llmHandler.initialize();
+  });
+  
+  test('should initialize LLM engine', () => {
+    expect(llmHandler.isInitialized()).toBe(true);
+  });
+  
+  test('should process calculator queries', async () => {
+    const response = await llmHandler.processUserInput('What is 5 plus 3?');
+    expect(response).toContain('8');
+  });
+  
+  test('should process storage queries', async () => {
+    await llmHandler.processUserInput('Store the value "test" with key "myKey"');
+    const response = await llmHandler.processUserInput('What is the value of "myKey"?');
+    expect(response).toContain('test');
+  });
+  
+  test('should handle invalid queries', async () => {
+    const response = await llmHandler.processUserInput('This is not a valid tool query');
+    expect(response).toContain('I cannot help with that');
+  });
+  
+  test('should maintain conversation history', async () => {
+    await llmHandler.processUserInput('What is 2 plus 2?');
+    const history = llmHandler.getMessageHistory();
+    expect(history).toHaveLength(3); // System prompt + user query + assistant response
+  });
+  
+  test('should handle tool execution errors', async () => {
+    const response = await llmHandler.processUserInput('What is 5 divided by 0?');
+    expect(response).toContain('division by zero');
+  });
+});
+```
+
 ## 2. Integration Testing
 
 ### Server-Transport Integration
@@ -183,117 +233,103 @@ describe('Server-Transport Integration', () => {
 });
 ```
 
-### UI Integration Tests
+### LLM-Tool Integration
 
 ```typescript
-describe('UI Integration', () => {
+describe('LLM-Tool Integration', () => {
+  let llmHandler: LLMHandler;
+  let transport: BrowserTransport;
+  let server: McpServer;
+  
   beforeEach(async () => {
-    // First set up test environment
-    await setupTestEnvironment();
-    
-    // Then initialize UI
-    setupCalculatorUI();
+    transport = new BrowserTransport();
+    await transport.start();
+    server = createServer();
+    await server.connect(transport);
+    llmHandler = new LLMHandler(transport, server, () => {});
+    await llmHandler.initialize();
   });
   
-  test('should handle calculator UI interaction', async () => {
-    const num1Input = document.getElementById('num1') as HTMLInputElement;
-    const num2Input = document.getElementById('num2') as HTMLInputElement;
-    const operationSelect = document.getElementById('operation') as HTMLSelectElement;
-    const calcButton = document.getElementById('calcButton') as HTMLButtonElement;
-    const output = document.getElementById('calcOutput');
-    
-    // Test each operation
-    const operations = [
-      { op: 'add', a: 5, b: 3, expected: '8' },
-      { op: 'subtract', a: 10, b: 4, expected: '6' },
-      { op: 'multiply', a: 6, b: 7, expected: '42' },
-      { op: 'divide', a: 15, b: 3, expected: '5' }
+  test('should execute calculator operations through LLM', async () => {
+    const queries = [
+      'What is 5 plus 3?',
+      'What is 10 minus 4?',
+      'What is 6 times 2?',
+      'What is 15 divided by 3?'
     ];
     
-    for (const { op, a, b, expected } of operations) {
-      operationSelect.value = op;
-      num1Input.value = a.toString();
-      num2Input.value = b.toString();
-      
-      fireEvent.click(calcButton);
-      
-      // Wait for the calculation to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      expect(output?.textContent).toBe(`Result: ${expected}`);
+    const expectedResults = ['8', '6', '12', '5'];
+    
+    for (let i = 0; i < queries.length; i++) {
+      const response = await llmHandler.processUserInput(queries[i]);
+      expect(response).toContain(expectedResults[i]);
     }
   });
   
-  test('should handle calculator error cases', async () => {
-    const num1Input = document.getElementById('num1') as HTMLInputElement;
-    const num2Input = document.getElementById('num2') as HTMLInputElement;
-    const operationSelect = document.getElementById('operation') as HTMLSelectElement;
-    const calcButton = document.getElementById('calcButton') as HTMLButtonElement;
-    const output = document.getElementById('calcOutput');
+  test('should execute storage operations through LLM', async () => {
+    // Store a value
+    await llmHandler.processUserInput('Store "hello" with key "greeting"');
     
-    // Test division by zero
-    operationSelect.value = 'divide';
-    num1Input.value = '10';
-    num2Input.value = '0';
+    // Retrieve the value
+    const response = await llmHandler.processUserInput('What is stored in "greeting"?');
+    expect(response).toContain('hello');
+  });
+  
+  test('should handle complex queries', async () => {
+    // Store some numbers
+    await llmHandler.processUserInput('Store 5 with key "num1"');
+    await llmHandler.processUserInput('Store 3 with key "num2"');
     
-    fireEvent.click(calcButton);
-    
-    // Wait for the error to be displayed
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    expect(output?.textContent).toContain('Error');
-    expect(output?.textContent).toContain('Division by zero');
+    // Perform calculation with stored numbers
+    const response = await llmHandler.processUserInput('Add the numbers stored in "num1" and "num2"');
+    expect(response).toContain('8');
   });
 });
+```
 
-describe('Storage UI Integration', () => {
+### UI-LLM Integration
+
+```typescript
+describe('UI-LLM Integration', () => {
   beforeEach(async () => {
-    // First set up test environment
     await setupTestEnvironment();
-    
-    // Then initialize UI
-    setupStorageUI();
+    setupLLMUI();
   });
   
-  test('should handle storage UI interaction', async () => {
-    const keyInput = document.getElementById('storageKey') as HTMLInputElement;
-    const valueInput = document.getElementById('storageValue') as HTMLInputElement;
-    const setButton = document.getElementById('setStorageButton') as HTMLButtonElement;
-    const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
-    const output = document.getElementById('storageOutput');
+  test('should handle natural language input', async () => {
+    const inputField = document.getElementById('queryInput') as HTMLInputElement;
+    const submitButton = document.getElementById('submitQuery') as HTMLButtonElement;
+    const outputDiv = document.getElementById('queryOutput') as HTMLDivElement;
     
-    // Set value
-    keyInput.value = 'test-key';
-    valueInput.value = 'test-value';
-    fireEvent.click(setButton);
+    // Test calculator query
+    inputField.value = 'What is 5 plus 3?';
+    await submitButton.click();
+    expect(outputDiv.textContent).toContain('8');
     
-    // Wait for the storage operation to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Test storage query
+    inputField.value = 'Store "hello" with key "greeting"';
+    await submitButton.click();
+    expect(outputDiv.textContent).toContain('stored');
     
-    expect(output?.textContent).toContain('Value stored successfully');
-    
-    // Get value
-    valueInput.value = '';
-    fireEvent.click(getButton);
-    
-    // Wait for the retrieval to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    expect(output?.textContent).toContain('test-value');
+    inputField.value = 'What is stored in "greeting"?';
+    await submitButton.click();
+    expect(outputDiv.textContent).toContain('hello');
   });
   
-  test('should handle missing storage keys', async () => {
-    const keyInput = document.getElementById('storageKey') as HTMLInputElement;
-    const getButton = document.getElementById('getStorageButton') as HTMLButtonElement;
-    const output = document.getElementById('storageOutput');
+  test('should handle errors gracefully', async () => {
+    const inputField = document.getElementById('queryInput') as HTMLInputElement;
+    const submitButton = document.getElementById('submitQuery') as HTMLButtonElement;
+    const outputDiv = document.getElementById('queryOutput') as HTMLDivElement;
     
-    keyInput.value = 'nonexistent-key';
-    fireEvent.click(getButton);
+    // Test division by zero
+    inputField.value = 'What is 5 divided by 0?';
+    await submitButton.click();
+    expect(outputDiv.textContent).toContain('division by zero');
     
-    // Wait for the retrieval to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    expect(output?.textContent).toContain('Key not found');
+    // Test invalid key
+    inputField.value = 'What is stored in "nonexistent"?';
+    await submitButton.click();
+    expect(outputDiv.textContent).toContain('not found');
   });
 });
 ```

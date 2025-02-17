@@ -145,6 +145,139 @@ const result = await resourceHandler.readCallback(uri, { key: "nonexistent" });
 // Result: { contents: [{ uri: "storage://nonexistent", text: "Key not found" }] }
 ```
 
+## LLM Integration
+
+### LLM Handler
+
+**Class:** `LLMHandler`
+
+**Description:**  
+Handles natural language processing and conversion of user queries into tool calls.
+
+**Constructor:**
+```typescript
+constructor(
+  transport: BrowserTransport,
+  server: McpServer,
+  modelStatusCallback: (status: string) => void
+)
+```
+
+**Methods:**
+
+#### initialize()
+```typescript
+async initialize(): Promise<boolean>
+```
+Initializes the LLM engine and sets up system prompts.
+
+**Returns:** Promise resolving to true if initialization is successful
+
+**Throws:** Error if initialization fails
+
+#### processUserInput()
+```typescript
+async processUserInput(
+  userInput: string,
+  streamCallback?: (text: string) => void
+): Promise<string>
+```
+
+Processes a natural language query and executes appropriate tool calls.
+
+**Parameters:**
+- `userInput`: The user's natural language query
+- `streamCallback`: Optional callback for streaming responses
+
+**Returns:** Promise resolving to the final response string
+
+**Example:**
+```typescript
+const llmHandler = new LLMHandler(transport, server, statusCallback);
+await llmHandler.initialize();
+
+// Calculator query
+const result = await llmHandler.processUserInput("What is 5 plus 3?");
+// Result: "The answer is 8"
+
+// Storage query
+await llmHandler.processUserInput('Store "hello" with key "greeting"');
+const value = await llmHandler.processUserInput('What is stored in "greeting"?');
+// Value: "The value is hello"
+```
+
+### Tool Call Format
+
+The LLM generates tool calls in the following format:
+
+```typescript
+interface ToolCall {
+  name: string;      // Tool name (e.g., "calculate", "storage-set")
+  params: {          // Tool parameters
+    [key: string]: any;
+  }
+}
+```
+
+**Calculator Examples:**
+```
+<tool>calculate</tool>
+<params>{"operation": "add", "a": 5, "b": 3}</params>
+```
+
+**Storage Examples:**
+```
+<tool>storage-set</tool>
+<params>{"key": "greeting", "value": "hello"}</params>
+
+<tool>storage-get</tool>
+<params>{"key": "greeting"}</params>
+```
+
+### Error Handling
+
+The LLM handler includes comprehensive error handling:
+
+1. **Initialization Errors:**
+   - Model loading failures
+   - WebGPU not supported
+   - Memory allocation issues
+
+2. **Processing Errors:**
+   - Invalid tool call format
+   - Unknown tool names
+   - Parameter validation failures
+   - Tool execution errors
+
+3. **Response Formatting:**
+   - Malformed tool responses
+   - Stream interruptions
+   - Context overflow
+
+### Implementation Notes
+
+1. **System Prompts:**
+   - Defines available tools and their formats
+   - Specifies response formatting rules
+   - Sets conversation boundaries
+
+2. **Message History:**
+   - Maintains conversation context
+   - Includes system prompts
+   - Manages context window
+
+3. **Performance Considerations:**
+   - Local processing using WebGPU
+   - Streaming responses for better UX
+   - Efficient memory management
+
+4. **Security:**
+   - Input validation
+   - Tool call verification
+   - Response sanitization
+
+For detailed implementation of the LLM handler, refer to `llm.ts`.
+
 ## Implementation Notes
 
 ### Tool Registration

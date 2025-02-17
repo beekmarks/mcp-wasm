@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { Transport } from './transport';
 
 const calculatorSchema = z.object({
   operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
