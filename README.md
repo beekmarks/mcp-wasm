@@ -211,6 +211,82 @@ You can monitor the execution flow of tool calls and LLM processing by opening y
 
 These logs can help you understand how the LLM processes your queries and interacts with the available tools. They're particularly useful when debugging why a particular query might not work as expected.
 
+## WebLLM Integration
+
+This project leverages the [@mlc-ai/web-llm](https://github.com/mlc-ai/web-llm) library (version 0.2.6) to run LLMs directly in the browser using WebGPU. The library provides several key features:
+
+1. Browser-based Inference:
+   - Runs models entirely in the browser
+   - Uses WebGPU for hardware acceleration
+   - No server-side model hosting required
+
+2. Efficient Model Loading:
+   - Progressive downloading
+   - Automatic caching
+   - Memory-efficient execution
+
+### Changing Models
+
+The project currently uses the `Phi-3.5-mini-instruct-q4f16_1-MLC-1k` model, but you can experiment with other models supported by WebLLM. To change the model:
+
+1. Open `src/web/llm.ts`
+2. Locate the `initialize()` method
+3. Modify the model name in the `CreateMLCEngine` call:
+
+```typescript
+this.engine = await CreateMLCEngine(
+  "your-chosen-model", // Replace with desired model
+  {
+    initProgressCallback: (progress) => {
+      this.modelStatusCallback(`Loading model: ${Math.round(progress.progress * 100)}%`);
+    }
+  }
+);
+```
+
+Available Models:
+- `Phi-3.5-mini-instruct-q4f16_1-MLC-1k` (default, 4-bit quantized, 1k context)
+- `Llama-2-7b-chat-q4f16_1` (larger model, better quality)
+- `RedPajama-3B-chat-q4f16_1` (balanced size/quality)
+- `TinyLlama-1.1B-chat-q4f16_1` (smallest, fastest)
+
+Model Considerations:
+1. Larger models:
+   - Better response quality
+   - Larger download size
+   - Higher memory usage
+   - Slower inference
+
+2. Smaller models:
+   - Faster loading and inference
+   - Lower memory usage
+   - May produce lower quality responses
+   - Better for resource-constrained environments
+
+3. Context Window:
+   - Models with larger context windows (e.g., `-2k` or `-4k` variants)
+   - Can handle longer conversations
+   - Require more memory
+
+### Performance Tips
+
+1. Model Loading:
+   - First load will download the model (~100MB-4GB depending on model)
+   - Subsequent loads use browser cache
+   - Keep browser tab open to maintain model in memory
+
+2. Memory Management:
+   - Close other resource-intensive tabs
+   - Monitor browser memory usage
+   - Consider smaller models for low-memory devices
+
+3. WebGPU Requirements:
+   - Check GPU compatibility
+   - Update graphics drivers
+   - Enable WebGPU flags in browser
+
+For more details about WebLLM and its capabilities, visit the [WebLLM Documentation](https://webllm.mlc.ai/).
+
 ## Project Structure
 
 ```
