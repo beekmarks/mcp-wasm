@@ -145,6 +145,58 @@ For optimal results:
 
 5. Note: If you see "Model Not Ready" or any initialization errors, try refreshing the page. If the issue persists, check your internet connection and ensure your browser supports WebGPU.
 
+### Tool Integration and Prompt Template
+
+The application uses a carefully designed system prompt to ensure consistent and reliable tool execution. The LLM is instructed to use specific XML-like tags and JSON formats when calling tools:
+
+```
+<tool>tool_name</tool>
+<params>{"param1": "value1", "param2": "value2"}</params>
+```
+
+Available tools and their formats:
+
+1. Calculator Tool:
+```
+<tool>calculate</tool>
+<params>{"operation": "add", "a": 5, "b": 3}</params>
+```
+Supports operations: "add", "subtract", "multiply", "divide"
+
+2. Storage Tool:
+```
+<tool>storage-set</tool>
+<params>{"key": "your-key", "value": "your-value"}</params>
+
+<tool>storage-get</tool>
+<params>{"key": "your-key"}</params>
+```
+
+When you submit a query, the LLM:
+1. Analyzes your natural language input
+2. Determines which tool(s) to use
+3. Formats the tool calls according to these templates
+4. Waits for each tool's response before proceeding
+5. Formats the final response in clear, natural language
+
+You can observe this process in real-time by viewing the console logs as described in the Debugging section.
+
+### Example Flow:
+
+Query: "What is 5 plus 3?"
+
+1. LLM processes query and generates:
+   ```
+   <tool>calculate</tool>
+   <params>{"operation": "add", "a": 5, "b": 3}</params>
+   ```
+
+2. MCP server executes calculation
+
+3. LLM receives result (8) and responds naturally: "The answer is 8"
+
+This structured approach ensures reliable communication between the LLM and the MCP server's tools while maintaining a natural conversation interface for users.
+
 ### Debugging and Monitoring
 
 You can monitor the execution flow of tool calls and LLM processing by opening your browser's developer tools (press F12 or right-click and select "Inspect") and viewing the Console tab. The application logs detailed information about:
