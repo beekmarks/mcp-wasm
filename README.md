@@ -145,6 +145,20 @@ For optimal results:
 
 5. Note: If you see "Model Not Ready" or any initialization errors, try refreshing the page. If the issue persists, check your internet connection and ensure your browser supports WebGPU.
 
+### Debugging and Monitoring
+
+You can monitor the execution flow of tool calls and LLM processing by opening your browser's developer tools (press F12 or right-click and select "Inspect") and viewing the Console tab. The application logs detailed information about:
+
+- 🎯 User input processing
+- 🔍 Tool call detection
+- 🛠️ Tool call parsing
+- 📡 MCP server requests
+- 📨 Tool responses
+- ✅ Tool execution results
+- ❌ Error messages (if any)
+
+These logs can help you understand how the LLM processes your queries and interacts with the available tools. They're particularly useful when debugging why a particular query might not work as expected.
+
 ## Project Structure
 
 ```
