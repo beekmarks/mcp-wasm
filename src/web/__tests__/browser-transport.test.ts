@@ -308,17 +308,28 @@ describe('BrowserTransport', () => {
         }
       };
 
-      transport['lastResponse'] = {
-        jsonrpc: "2.0" as const,
-        id: 1,
-        error: {
-          code: -32603,
-          message: 'Unknown tool'
+      // Mock WASM server response for unknown tool
+      transport.onMessage(jest.fn((msg: any) => {
+        if (msg.type === 'mcp-tool-request' && msg.message.params.name === 'invalid-tool') {
+          transport.messageHandler(new MessageEvent('message', {
+            data: {
+              type: 'mcp-tool-response',
+              id: msg.message.id,
+              response: {
+                jsonrpc: '2.0',
+                id: msg.message.id,
+                error: {
+                  code: -32601,
+                  message: 'Unknown tool: invalid-tool'
+                }
+              }
+            }
+          }));
         }
-      };
+      }));
 
-      await expect(transport.send(request)).rejects.toThrow('Unknown tool');
-    });
+      await expect(transport.send(request)).rejects.toThrow('Unknown tool: invalid-tool');
+    }, 15000);
 
     test('should handle malformed request error', async () => {
       const request = {

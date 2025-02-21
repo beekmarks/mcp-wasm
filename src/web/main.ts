@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { BrowserTransport } from './browser-transport';
 import { createServer } from './server';
 import { LLMHandler } from './llm';
+import { validateConfig, config } from './config';
+import { TavilyService } from './services/tavily';
 
 interface ToolResponse {
   result?: {
@@ -190,14 +192,38 @@ async function initializeLLM(transport: BrowserTransport, server: McpServer) {
       const response = await llmHandler.processUserInput(
         input,
         (text: string) => {
-          // Update assistant message
-          let assistantDiv = chatOutput.querySelector('.message.assistant:last-child');
-          if (!assistantDiv) {
-            assistantDiv = document.createElement('div');
-            assistantDiv.className = 'message assistant';
-            chatOutput.appendChild(assistantDiv);
+          console.log('🤖 AI Response Text:', text);
+          
+          try {
+            // Try to parse the response as JSON
+            const searchData = JSON.parse(text);
+            console.log('🔍 Parsed Search Data:', searchData);
+            
+            // Create a new message div for this response
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            
+            // Add AI-generated answer if available
+            if (searchData.answer) {
+              console.log('📝 Displaying answer:', searchData.answer);
+              messageDiv.textContent = searchData.answer;
+            } else {
+              console.log('📝 No answer found, displaying raw text:', text);
+              messageDiv.textContent = text;
+            }
+
+            // Add the message to the chat
+            chatOutput.appendChild(messageDiv);
+          } catch (e) {
+            // If parsing fails, treat it as regular text
+            console.log('📝 Failed to parse JSON, displaying as text:', text);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            messageDiv.textContent = text;
+            chatOutput.appendChild(messageDiv);
           }
-          assistantDiv.textContent = text;
+          
+          // Scroll to bottom
           chatOutput.scrollTop = chatOutput.scrollHeight;
         }
       );
@@ -223,10 +249,229 @@ async function initializeLLM(transport: BrowserTransport, server: McpServer) {
 }
 
 async function main() {
-  const { transport, server } = await setupEnvironment();
-  await initializeCalculator(transport);
-  await initializeStorage(transport);
-  await initializeLLM(transport, server);
+  try {
+    // Validate environment variables
+    validateConfig();
+
+    const { transport, server } = await setupEnvironment();
+    await initializeCalculator(transport);
+    await initializeStorage(transport);
+    await initializeLLM(transport, server);
+
+    // Listen for messages from the browser transport
+    window.addEventListener('message', async (event) => {
+      // Only handle tool requests
+      if (event.data?.type !== 'mcp-tool-request') {
+        return;
+      }
+
+      console.log('🔄 WASM: Received tool request:', event.data);
+      
+      try {
+        const { message } = event.data;
+        const toolName = message.params.name;
+        const toolParams = message.params.params;
+        
+        console.log('🔧 WASM: Executing tool:', toolName, 'with params:', toolParams);
+        
+        if (toolName === 'tavily-search') {
+          try {
+            console.log('🔍 WASM: Validating config...');
+            validateConfig();
+            console.log('✅ WASM: Config validated');
+
+            console.log('🚀 WASM: Creating Tavily service...');
+            const tavilyService = new TavilyService(config.tavilyApiKey);
+            console.log('✅ WASM: Tavily service created');
+
+            console.log('🔎 WASM: Executing search...');
+            const results = await tavilyService.search(toolParams);
+            console.log('✅ WASM: Search completed:', results);
+
+            // Return just the answer and query to keep the response focused
+            const response = {
+              answer: results.answer,
+              query: results.query
+            };
+
+            // Send the response back to the browser transport
+            window.postMessage({
+              type: 'mcp-tool-response',
+              id: message.id,
+              response: {
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  contents: [{
+                    type: 'text',
+                    text: JSON.stringify(response)
+                  }]
+                }
+              }
+            }, '*');
+            
+            console.log('✅ WASM: Response sent:', response);
+          } catch (error) {
+            console.error('❌ WASM: Tavily search error:', error);
+            window.postMessage({
+              type: 'mcp-tool-response',
+              id: message.id,
+              response: {
+                jsonrpc: '2.0',
+                id: message.id,
+                error: {
+                  message: error.message
+                }
+              }
+            }, '*');
+          }
+          return;
+        }
+
+        let response;
+        
+        switch (toolName) {
+          case 'calculate': {
+            try {
+              console.log('🔢 WASM: Executing calculation...');
+              const { operation, a, b } = toolParams;
+              
+              let result: number;
+              switch (operation) {
+                case 'add':
+                  result = a + b;
+                  break;
+                case 'subtract':
+                  result = a - b;
+                  break;
+                case 'multiply':
+                  result = a * b;
+                  break;
+                case 'divide':
+                  if (b === 0) throw new Error('Division by zero');
+                  result = a / b;
+                  break;
+                default:
+                  throw new Error(`Unknown operation: ${operation}`);
+              }
+              
+              console.log('✅ WASM: Calculation completed:', result);
+              
+              response = {
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  contents: [{
+                    type: "text",
+                    text: result.toString()
+                  }]
+                }
+              };
+            } catch (error) {
+              console.error('❌ WASM: Calculate error:', error);
+              throw error;
+            }
+            break;
+          }
+
+          case 'storage-set': {
+            try {
+              console.log('💾 WASM: Setting storage value...');
+              const { key, value } = toolParams;
+              
+              if (!key) {
+                throw new Error('Key is required');
+              }
+              
+              localStorage.setItem(key, value);
+              console.log('✅ WASM: Storage value set:', { key, value });
+              
+              response = {
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  contents: [{
+                    type: "text",
+                    text: `Value stored successfully at key: ${key}`
+                  }]
+                }
+              };
+            } catch (error) {
+              console.error('❌ WASM: Storage set error:', error);
+              throw error;
+            }
+            break;
+          }
+
+          case 'storage-get': {
+            try {
+              console.log('🔍 WASM: Getting storage value...');
+              const { key } = toolParams;
+              
+              if (!key) {
+                throw new Error('Key is required');
+              }
+              
+              const value = localStorage.getItem(key);
+              if (value === null) {
+                throw new Error(`Key not found: ${key}`);
+              }
+              
+              console.log('✅ WASM: Storage value retrieved:', { key, value });
+              
+              response = {
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  contents: [{
+                    type: "text",
+                    text: value
+                  }]
+                }
+              };
+            } catch (error) {
+              console.error('❌ WASM: Storage get error:', error);
+              throw error;
+            }
+            break;
+          }
+          
+          default:
+            throw new Error(`Unknown tool: ${toolName}`);
+        }
+        
+        // Send the response back to the browser transport
+        window.postMessage({
+          type: 'mcp-tool-response',
+          id: message.id,
+          response
+        }, '*');
+      } catch (error) {
+        console.error('❌ WASM: Error handling tool request:', error);
+        // Send error response
+        window.postMessage({
+          type: 'mcp-tool-response',
+          id: event.data.id,
+          response: {
+            jsonrpc: '2.0',
+            id: event.data.message.id,
+            error: {
+              code: -32000,
+              message: error.message
+            }
+          }
+        }, '*');
+      }
+    });
+  } catch (error) {
+    console.error('Initialization error:', error);
+    // Display error in the UI
+    const errorDiv = document.createElement('div');
+    errorDiv.style.color = 'red';
+    errorDiv.style.padding = '20px';
+    errorDiv.textContent = `Error: ${error.message}`;
+    document.body.prepend(errorDiv);
+  }
 }
 
 main().catch(console.error);

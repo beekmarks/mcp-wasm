@@ -17,29 +17,31 @@ export class LLMHandler {
   private transport: BrowserTransport;
   private server: McpServer;
   private messages: Message[] = [];
-  private systemPrompt = `You are a helpful AI assistant with access to tools. Follow these rules EXACTLY:
-1. When using tools, you MUST use this EXACT format (do not modify or use different tags):
+  private systemPrompt = `You are a helpful AI assistant with access to tools. You MUST use tools when appropriate. Follow these rules EXACTLY:
+
+1. For ANY questions about current information, weather, news, or facts, ALWAYS use:
+   <tool>tavily-search</tool>
+   <params>{
+     "query": "your search query",
+     "searchDepth": "advanced"
+   }</params>
+
+2. For calculations, use:
    <tool>calculate</tool>
-   <params>{"operation": "add", "a": 5, "b": 3}</params>
+   <params>{"operation": "add|subtract|multiply|divide", "a": number1, "b": number2}</params>
 
-2. For calculations, use these EXACT formats:
-   - Addition: <tool>calculate</tool><params>{"operation": "add", "a": number1, "b": number2}</params>
-   - Subtraction: <tool>calculate</tool><params>{"operation": "subtract", "a": number1, "b": number2}</params>
-   - Multiplication: <tool>calculate</tool><params>{"operation": "multiply", "a": number1, "b": number2}</params>
-   - Division: <tool>calculate</tool><params>{"operation": "divide", "a": number1, "b": number2}</params>
+3. For storage operations, use:
+   <tool>storage-set</tool>
+   <params>{"key": "your-key", "value": "your-value"}</params>
+   <tool>storage-get</tool>
+   <params>{"key": "your-key"}</params>
 
-3. For storage operations, use these EXACT formats:
-   - Set: <tool>storage-set</tool><params>{"key": "your-key", "value": "your-value"}</params>
-   - Get: <tool>storage-get</tool><params>{"key": "your-key"}</params>
-
-4. IMPORTANT:
-   - Use EXACTLY these tool names: "calculate", "storage-set", "storage-get"
-   - Always use valid JSON in params
-   - Wait for tool results before continuing
-   - Keep responses clear and concise
-6. Do not include ASCII art or unnecessary formatting`;
+Remember: ALWAYS use tavily-search for current information. Do not try to answer from your own knowledge.`;
   private modelStatusCallback: (status: string) => void;
   private currentResponse: string = '';
+  private currentToolCalls: any[] = [];
+  private toolCallBuffer: string = '';
+  private resolveToolCalls: () => void = () => {};
 
   constructor(transport: BrowserTransport, server: McpServer, modelStatusCallback: (status: string) => void) {
     this.transport = transport;
@@ -55,7 +57,7 @@ export class LLMHandler {
       
       // Create engine with progress callback
       this.engine = await CreateMLCEngine(
-        "Phi-3.5-mini-instruct-q4f16_1-MLC-1k", // Using Phi-3.5 mini with 1k context window for lower resource usage
+        "Hermes-3-Llama-3.1-8B-q4f16_1-MLC", // Using Hermes 3 for better tool calling
         {
           initProgressCallback: (progress) => {
             this.modelStatusCallback(`Loading model: ${Math.round(progress.progress * 100)}%`);
@@ -72,166 +74,89 @@ export class LLMHandler {
     }
   }
 
-  private parseToolCalls(text: string): ToolCall[] {
-    const toolCalls: ToolCall[] = [];
-    const toolRegex = /<tool>(.*?)<\/tool>\s*<params>(.*?)<\/params>/gs;
-    let match;
+  async processUserInput(input: string, onProgress: (text: string) => void): Promise<void> {
+    console.log('🎯 Processing user input:', input);
 
-    while ((match = toolRegex.exec(text)) !== null) {
-      try {
-        const toolName = match[1].trim();
-        const params = JSON.parse(match[2]);
-        console.log('🛠️ Found tool call:', { toolName, params });
-        toolCalls.push({ name: toolName, params });
-      } catch (error) {
-        console.error('❌ Error parsing tool call:', error);
-      }
-    }
-
-    return toolCalls;
-  }
-
-  private async executeToolCalls(toolCalls: ToolCall[]): Promise<string[]> {
-    const results: string[] = [];
-    
-    console.log('⚡ Executing tool calls:', toolCalls);
-    
-    for (const call of toolCalls) {
-      try {
-        console.log('🚀 Executing tool:', call.name, 'with params:', call.params);
-        const result = await this.handleToolCall(call);
-        console.log('✅ Tool returned:', result);
-        results.push(`Tool ${call.name} returned: ${result}`);
-      } catch (error) {
-        console.error('❌ Tool execution failed:', error);
-        results.push(`Tool ${call.name} failed: ${error}`);
-      }
-    }
-
-    return results;
-  }
-
-  async processUserInput(userInput: string, streamCallback?: (text: string) => void): Promise<string> {
     try {
       if (!this.engine) {
-        throw new Error("Model not initialized");
+        throw new Error('LLM engine not initialized');
       }
 
-      console.log('🎯 Processing user input:', userInput);
+      // Add user message
+      const messages = [
+        { role: "system" as const, content: this.systemPrompt },
+        { role: "user" as const, content: input }
+      ];
 
-      // Add user message to history
-      this.messages.push({ role: "user", content: userInput });
-      this.currentResponse = '';
-      let finalResponse = '';
-      let lastToolCallIndex = 0;
-
-      // Generate response with streaming
-      for await (const chunk of await this.engine.chat.completions.create({
-        messages: this.messages,
-        temperature: 0.3,
+      // Generate response using WebLLM
+      const response = await this.engine.chatCompletion({
+        messages,
+        stream: false,
         max_tokens: 800,
-        stream: true
-      })) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        this.currentResponse += content;
-        finalResponse += content;
-        
-        //console.log('📝 Current response:', this.currentResponse);
-        
-        // Only process tool calls if we have complete tags
-        if (this.currentResponse.includes('</tool>') && this.currentResponse.includes('</params>')) {
-          console.log('🔍 Checking for tool calls in:', this.currentResponse.slice(lastToolCallIndex));
-          const toolCalls = this.parseToolCalls(this.currentResponse.slice(lastToolCallIndex));
-          
-          if (toolCalls.length > 0) {
-            console.log('🛠️ Found tool calls:', toolCalls);
-            
-            // Execute tool calls and get results
-            const toolResults = await this.executeToolCalls(toolCalls);
-            console.log('✨ Tool results:', toolResults);
-            
-            // Add tool results to the conversation
-            for (const result of toolResults) {
-              this.messages.push({ role: "assistant", content: result });
-            }
-            
-            // Update the last processed position
-            lastToolCallIndex = this.currentResponse.length;
-            
-            if (streamCallback) {
-              streamCallback(this.currentResponse + '\n' + toolResults.join('\n'));
-            }
-          }
-        }
-        
-        // Always stream the current chunk
-        if (streamCallback) {
-          streamCallback(this.currentResponse);
-        }
+        temperature: 0.7
+      });
+
+      console.log('🤖 LLM Response:', response);
+
+      // Parse the tool call from the LLM response
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        console.error('❌ No content in LLM response');
+        onProgress('I apologize, but I was unable to process your request properly.');
+        return;
       }
 
-      console.log('🏁 Final response:', finalResponse);
-
-      // Process any remaining tool calls in the final response
-      if (finalResponse.includes('</tool>') && finalResponse.includes('</params>')) {
-        console.log('🔍 Checking for remaining tool calls in:', finalResponse.slice(lastToolCallIndex));
-        const remainingToolCalls = this.parseToolCalls(finalResponse.slice(lastToolCallIndex));
-        if (remainingToolCalls.length > 0) {
-          console.log('🛠️ Processing remaining tool calls:', remainingToolCalls);
-          const toolResults = await this.executeToolCalls(remainingToolCalls);
-          console.log('✨ Final tool results:', toolResults);
-          for (const result of toolResults) {
-            this.messages.push({ role: "assistant", content: result });
-            finalResponse += '\n' + result;
-          }
-        }
+      const toolMatch = content.match(/<tool>(.*?)<\/tool>\s*<params>(.*?)<\/params>/s);
+      if (!toolMatch) {
+        console.error('❌ No tool call found in LLM response:', content);
+        onProgress('I apologize, but I was unable to process your request properly.');
+        return;
       }
 
-      // Add assistant's final response to history
-      this.messages.push({ role: "assistant", content: finalResponse });
+      // Extract tool name and parameters
+      const [_, toolName, paramsStr] = toolMatch;
+      let params;
+      try {
+        params = JSON.parse(paramsStr);
+      } catch (e) {
+        console.error('❌ Error parsing tool params:', e);
+        onProgress('I apologize, but I was unable to process your request properly.');
+        return;
+      }
 
-      return finalResponse;
-    } catch (error) {
-      console.error('❌ Error processing input:', error);
-      throw error;
-    }
-  }
+      console.log('🛠️ Selected tool:', toolName, 'with params:', params);
 
-  private async handleToolCall(toolCall: { name: string; params: any }) {
-    const toolName = toolCall.name;
-    const params = toolCall.params;
-
-    try {
-      console.log('📡 Sending tool request via MCP:', { toolName, params });
-      await this.transport.send({
+      // Call the selected tool
+      console.log('🛠️ Sending tool request:', {
+        name: toolName,
+        params: params
+      });
+      
+      const toolResponse = await this.transport.send({
         jsonrpc: '2.0',
         method: 'tool',
         id: Date.now(),
         params: {
           name: toolName,
-          params: params
-        },
+          params
+        }
       });
 
-      const response = this.transport.getLastResponse();
-      if (!response) {
-        throw new Error('No response received from tool');
-      }
+      console.log('🛠️ Received tool response:', JSON.stringify(toolResponse, null, 2));
 
-      if (response.error) {
-        throw new Error(response.error.message);
+      // Process the tool response
+      if (toolResponse.result?.contents?.[0]?.text) {
+        onProgress(toolResponse.result.contents[0].text);
+      } else if (toolResponse.error) {
+        console.error('❌ Tool execution error:', toolResponse.error);
+        onProgress(`Error: ${toolResponse.error.message}`);
+      } else {
+        console.error('❌ Invalid tool response format:', toolResponse);
+        onProgress('I apologize, but I encountered an error processing your request.');
       }
-
-      const result = response.result?.contents?.[0]?.text;
-      if (!result) {
-        throw new Error('Invalid response format from tool');
-      }
-
-      console.log('📨 Tool response:', result);
-      return result;
     } catch (error) {
-      console.error(`❌ Error calling tool ${toolName}:`, error);
-      throw error instanceof Error ? error : new Error(String(error));
+      console.error('❌ Error processing input:', error);
+      onProgress(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

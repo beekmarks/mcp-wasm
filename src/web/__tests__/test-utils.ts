@@ -193,3 +193,8 @@ describe('Test Utils', () => {
     expect(env.transport.isConnected()).toBe(true);
   });
 });
+    expect(env.transport).toBeInstanceOf(BrowserTransport);
+    expect(env.server).toBeInstanceOf(McpServer);
+    expect(env.transport.isConnected()).toBe(true);
+  });
+});

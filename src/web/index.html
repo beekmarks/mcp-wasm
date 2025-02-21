@@ -50,35 +50,76 @@
             resize: vertical;
             font-size: 14px;
         }
-        .user-message {
-            background-color: #e3f2fd;
+        .message {
             padding: 12px;
             margin: 8px 0;
             border-radius: 8px;
             max-width: 80%;
+        }
+        .message.user {
+            background-color: #e3f2fd;
             margin-left: auto;
             color: #1565c0;
         }
-        .assistant-message {
+        .message.assistant {
             background-color: #f5f5f5;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 8px;
-            max-width: 80%;
             color: #333;
         }
-        .error-message {
+        .message.error {
             background-color: #ffebee;
             color: #c62828;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 8px;
         }
-        .loading-message {
-            color: #666;
-            font-style: italic;
-            padding: 8px;
-            margin: 8px 0;
+        .search-results {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        .search-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            border-left: 3px solid #2196f3;
+        }
+        .search-result h3 {
+            margin: 0 0 5px 0;
+            color: #1976d2;
+        }
+        .search-result .url {
+            color: #4caf50;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        .search-result .excerpt {
+            color: #616161;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        .search-result .score {
+            color: #9e9e9e;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        .search-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .search-image {
+            max-width: 200px;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        .search-answer {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 3px solid #4caf50;
         }
         #modelStatus {
             margin-bottom: 10px;
@@ -97,7 +138,7 @@
         <div id="modelStatus">Model Status: <span id="modelStatusText">Loading...</span></div>
         <div id="chatOutput"></div>
         <div style="display: flex; align-items: flex-start;">
-            <textarea id="chatInput" rows="3" placeholder="Type your message..."></textarea>
+            <textarea id="chatInput" rows="3" placeholder="Type your message here... Try asking me to search for something!"></textarea>
             <button id="sendButton">Send</button>
         </div>
     </div>

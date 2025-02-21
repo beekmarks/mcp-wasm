@@ -4,7 +4,8 @@
   "description": "WASM-based Model Context Protocol Server POC",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "cleanup": "./scripts/cleanup.sh",
+    "dev": "npm run cleanup && vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "jest",
@@ -24,6 +25,7 @@
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.6",
     "@modelcontextprotocol/sdk": "latest",
+    "@tavily/core": "^0.3.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -32,10 +34,16 @@
     "@types/jest": "^29.5.14",
     "@types/node": "latest",
     "assemblyscript": "latest",
+    "dotenv": "^16.4.7",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.2.5",
+    "ts-node": "latest",
     "typescript": "latest",
     "vite": "latest"
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
   }
 }

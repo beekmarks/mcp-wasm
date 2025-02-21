@@ -11,12 +11,7 @@ export interface JSONRPCMessage {
 export interface JSONRPCResponse {
   jsonrpc: "2.0";
   id: number;
-  result?: {
-    contents?: Array<{
-      type: string;
-      text: string;
-    }>;
-  };
+  result?: any;
   error?: {
     code: number;
     message: string;

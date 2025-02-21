@@ -8,14 +8,36 @@ global.URL = class URL {
   }
 } as any;
 
+// Mock Vite's import.meta.env
+declare global {
+  namespace NodeJS {
+    interface Global {
+      import: {
+        meta: {
+          env: {
+            VITE_TAVILY_API_KEY: string;
+          };
+        };
+      };
+    }
+  }
+}
+
+// Set up import.meta.env mock
+(global as any).import = {
+  meta: {
+    env: {
+      VITE_TAVILY_API_KEY: process.env.VITE_TAVILY_API_KEY || 'test-api-key'
+    }
+  }
+};
+
 // Reset environment before each test
 beforeEach(() => {
-  // Reset DOM
-  document.body.innerHTML = '';
-  
-  // Reset storage
-  localStorage.clear();
-  
-  // Reset server state
-  jest.resetModules();
+  // Clear any mocks if needed
+});
+
+// Clean up after each test
+afterEach(() => {
+  jest.clearAllMocks();
 });

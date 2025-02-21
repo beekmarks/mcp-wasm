@@ -1,113 +1,98 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { Transport } from './transport';
+import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/server/types';
 
-const calculatorSchema = z.object({
-  operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-  a: z.number(),
-  b: z.number()
-});
-
-const storageSchema = z.object({
-  key: z.string(),
-  value: z.string()
-});
-
-// In-memory storage
-const storage = new Map<string, string>();
+// Create a shared storage instance
+export const storage = new Map<string, string>();
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "WASM MCP Server",
-    version: "1.0.0"
+    name: 'mcp-wasm-poc',
+    version: '1.0.0',
+    implementation: 'wasm'
   });
 
-  // Register calculator tool
-  server.tool(
-    "calculate",
-    calculatorSchema.shape,
-    async (params) => {
-      // Parse and validate inputs
-      const result = calculatorSchema.safeParse(params);
-      if (!result.success) {
-        throw new Error('Invalid input parameters');
-      }
+  // Schemas
+  const calculatorSchema = z.object({
+    operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
+    a: z.number(),
+    b: z.number()
+  }).strict();
 
-      const { operation, a, b } = result.data;
-      let value: number;
-      
-      switch (operation) {
-        case 'add':
-          value = a + b;
-          break;
-        case 'subtract':
-          value = a - b;
-          break;
-        case 'multiply':
-          value = a * b;
-          break;
-        case 'divide':
-          if (b === 0) throw new Error('Division by zero');
-          value = a / b;
-          break;
-        default:
-          throw new Error('Invalid operation');
-      }
+  const storageSchema = z.object({
+    key: z.string(),
+    value: z.string()
+  }).strict();
 
+  // Calculator tool
+  server.tool('calculate', 'Perform basic arithmetic operations', calculatorSchema.shape, async (params, extra: RequestHandlerExtra) => {
+    let result = 0;
+    switch (params.operation) {
+      case 'add':
+        result = params.a + params.b;
+        break;
+      case 'subtract':
+        result = params.a - params.b;
+        break;
+      case 'multiply':
+        result = params.a * params.b;
+        break;
+      case 'divide':
+        if (params.b === 0) throw new Error('Division by zero');
+        result = params.a / params.b;
+        break;
+    }
+    return {
+      contents: [{ type: 'text', text: result.toString() }]
+    };
+  });
+
+  // Storage tools
+  server.tool('storage-set', 'Store a value in local storage', storageSchema.shape, async (params, extra: RequestHandlerExtra) => {
+    storage.set(params.key, params.value);
+    return {
+      contents: [{ type: 'text', text: 'Value stored successfully' }]
+    };
+  });
+
+  server.tool('storage-get', 'Get a value from local storage', z.object({ key: z.string() }).shape, async (params, extra: RequestHandlerExtra) => {
+    const value = storage.get(params.key);
+    if (!value) {
+      throw new Error('Key not found');
+    }
+    return {
+      contents: [{ type: 'text', text: value }]
+    };
+  });
+
+  // Storage resource
+  const template = {
+    template: 'storage://local',
+    parameters: {
+      key: {
+        type: 'string',
+        description: 'Storage key'
+      }
+    }
+  };
+
+  server.resource('storage', template, async (uri: URL, extra: RequestHandlerExtra) => {
+    const key = extra.variables?.key;
+    if (!key) {
+      throw new Error('Missing key parameter');
+    }
+
+    const value = storage.get(key);
+    if (!value) {
       return {
-        content: [{ type: "text", text: value.toString() }]
+        contents: [{ type: 'text', text: 'Key not found' }]
       };
     }
-  );
-
-  // Register storage tool
-  server.tool(
-    "set-storage",
-    storageSchema.shape,
-    async (params) => {
-      // Parse and validate inputs
-      const result = storageSchema.safeParse(params);
-      if (!result.success) {
-        throw new Error('Invalid input parameters');
-      }
-
-      const { key, value } = result.data;
-      storage.set(key, value);
-      
-      return {
-        content: [{ type: "text", text: 'Value stored successfully' }]
-      };
-    }
-  );
-
-  // Register storage resource
-  server.resource(
-    "storage",
-    "storage://{key}",
-    async (uri: URL, extra: any) => {
-      const key = extra.key;
-      if (!key) {
-        throw new Error('Missing key parameter');
-      }
-
-      const value = storage.get(key);
-      if (!value) {
-        return {
-          contents: [{
-            uri: uri.toString(),
-            text: 'Key not found'
-          }]
-        };
-      }
-      
-      return {
-        contents: [{
-          uri: uri.toString(),
-          text: value
-        }]
-      };
-    }
-  );
+    
+    return {
+      contents: [{ type: 'text', text: value }]
+    };
+  });
 
   return server;
 }

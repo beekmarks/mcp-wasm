@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { TavilyService } from "../web/services/tavily";
+import { config, validateConfig } from "../web/config";
 
 // Create a shared storage instance
 export const storage = new Map<string, string>();
@@ -75,6 +77,54 @@ export function createServer(): McpServer {
       return {
         content: [{ type: "text", text: `Stored value at key: ${key}` }]
       };
+    }
+  );
+
+  // Add Tavily search tool
+  server.tool(
+    "tavily-search",
+    {
+      query: z.string(),
+      search_depth: z.enum(["basic", "advanced"]).optional(),
+      include_answer: z.union([z.boolean(), z.enum(["basic", "advanced"])]).optional(),
+      max_results: z.number().min(1).max(20).optional(),
+      include_raw_content: z.boolean().optional(),
+      include_images: z.boolean().optional(),
+      category: z.enum(["general", "news"]).optional()
+    },
+    async (params) => {
+      try {
+        console.log(' WASM Server: Received Tavily search request:', params);
+        
+        // Validate config before using the API key
+        console.log(' WASM Server: Validating config...');
+        validateConfig();
+        console.log(' WASM Server: Config validated');
+        
+        console.log(' WASM Server: Creating Tavily service...');
+        const tavilyService = new TavilyService(config.tavilyApiKey);
+        console.log(' WASM Server: Tavily service created');
+        
+        console.log(' WASM Server: Executing search...');
+        const results = await tavilyService.search(params);
+        console.log(' WASM Server: Search completed:', results);
+        
+        // Format the response as JSON string to match our UI expectations
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(results)  // Return raw JSON for the UI to parse
+          }]
+        };
+      } catch (error) {
+        console.error(' WASM Server: Tavily search error:', error);
+        return {
+          content: [{ 
+            type: "text", 
+            text: `Error performing search: ${error.message}` 
+          }]
+        };
+      }
     }
   );
 
